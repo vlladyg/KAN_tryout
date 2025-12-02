@@ -1,0 +1,12 @@
+{
+  "1D_KAN": {
+    "params": 288,
+    "final_test_mse": 0.011380202136933804,
+    "training_time": 53.902095079422
+  },
+  "2D_KAN": {
+    "params": 10377,
+    "final_test_mse": 0.012285919860005379,
+    "training_time": 6.9330058097839355
+  }
+}
