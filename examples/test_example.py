@@ -140,30 +140,35 @@ if HAS_LMKAN and torch.cuda.is_available():
     print("\n5. Testing 2D KAN (lmKAN)...")
     
     class LookupKAN2DModel(nn.Module):
-        def __init__(self, num_grids, input_dim, output_dim):
+        def __init__(self, num_grids, input_dim, hidden_dim, output_dim):
             super(LookupKAN2DModel, self).__init__()
             self.bn = nn.BatchNorm1d(input_dim, affine=False)
+            # hidden_dim must be divisible by tile_size (8)
             self.kan = LMKAN2DLayer(
                 num_grids=num_grids,
                 input_dim=input_dim,
-                output_dim=output_dim,
+                output_dim=hidden_dim,  # Use hidden_dim divisible by tile_size
                 tile_size_forward=8,
                 tile_size_backward=4,
                 block_size_forward=1024,
                 block_size_backward=512,
             )
+            # Final linear layer to get to output_dim
+            self.output_layer = nn.Linear(hidden_dim, output_dim)
         
         def forward(self, x):
             x = self.bn(x)
-            x = x.T
-            output = self.kan(x)
-            return output.T
+            x = x.T.contiguous()  # Must be contiguous for CUDA kernels
+            x = self.kan(x)  # [hidden_dim, batch_size]
+            x = x.T  # [batch_size, hidden_dim]
+            return self.output_layer(x)  # [batch_size, output_dim]
         
         def get_hessian_regularization(self):
             return self.kan.get_hessian_regularization()
     
     try:
-        model_2d = LookupKAN2DModel(num_grids=8, input_dim=32, output_dim=1).cuda()
+        # hidden_dim=8 is divisible by tile_size=8
+        model_2d = LookupKAN2DModel(num_grids=8, input_dim=32, hidden_dim=8, output_dim=1).cuda()
         test_input = torch.randn(16, 32).cuda()
         test_output = model_2d(test_input)
         print(f"   ✓ 2D KAN forward pass successful")
